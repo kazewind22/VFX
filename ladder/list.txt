@@ -1,0 +1,7 @@
+ladder01.JPG 0.066667
+ladder02.JPG 0.076923
+ladder03.JPG 0.1
+ladder04.JPG 0.166667
+ladder05.JPG 0.2
+ladder06.JPG 0.25
+ladder07.JPG 0.333333

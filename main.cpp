@@ -5,8 +5,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <tuple>
 
-#define TOLERANCE 4
+#define TOLERANCE 6
+#define MAX_SHIFT_BIT 4
 
 using namespace cv;
 using namespace std;
@@ -17,8 +19,8 @@ void ComputeBitmaps(const Mat& img, Mat& tb, Mat& eb);
 void BitmapShift(const Mat& bm, int x, int y, Mat& bm_ret);
 int BitmapTotal(const Mat& bm);
 void GetExpShift(const Mat& img1, const Mat& img2, int shift_bits, int shift_ret[2]);
-void crop(const Mat& img, Mat& ret, int x1, int x2, int y1, int y2);
-
+void LocateImages(const vector<Mat> &images, vector<Mat> &located_images, vector<tuple<int,int>> &shifts);
+void writeLocateImages(string path, vector<Mat> &imgs);
 
 int main(int argc, char** argv)
 {
@@ -26,6 +28,7 @@ int main(int argc, char** argv)
 
 	vector<Mat> images;
 	vector<Mat> g_images;
+	vector<Mat> l_images;
 	vector<float> times;
 
 	loadExposureSeq(path, images, times);
@@ -33,26 +36,23 @@ int main(int argc, char** argv)
 	for(int i = 0; i < images.size(); i++)
 	{
 		Mat gray;
-		cvtColor(images[i], gray, cv::COLOR_RGB2GRAY);
+		cvtColor(images[i], gray, COLOR_RGB2GRAY);
 		g_images.push_back(gray);
 	}
-	Mat shifted;
-	BitmapShift(g_images[0], 2, -1, shifted);
-	imshow("img", g_images[0]);
-	imshow("imgs", shifted);
-	int shift_ret[2];
-	GetExpShift(g_images[0], shifted, 4, shift_ret);
-	cout << shift_ret[0] << ' ' << shift_ret[1] << endl;
 
+	vector<tuple<int,int>> shifts;
+	shifts.push_back(make_tuple(0,0));
+	for(int i = 1; i < g_images.size(); i++)
+	{
+		int shift_ret[2];
+		GetExpShift(g_images[0], g_images[i], MAX_SHIFT_BIT, shift_ret);
+		shifts.push_back(make_tuple(shift_ret[0],shift_ret[1]));
+	}
 
-	//Mat R = Mat(50,20, CV_8UC3);
-	//Size s2 = R.size();
-	//randu(R, Scalar::all(0), Scalar::all(255));
-	//cout << R << endl << endl;
-	//cout << s2.height << ' ' << s2.width << endl;
-	//cout << R.rows << ' ' << R.cols << endl;
+	LocateImages(images, l_images, shifts);
 
-	waitKey(0);
+	writeLocateImages(path, l_images);
+
 	return 0;
 }
 
@@ -198,7 +198,56 @@ void GetExpShift(const Mat& img1, const Mat& img2, int shift_bits, int shift_ret
 	return;
 }
 
-void crop(Mat& img, Mat& ret, int x1, int x2, int y1, int y2)
+void LocateImages(const vector<Mat> &images, vector<Mat> &located_images, vector<tuple<int,int>> &shifts)
 {
+	Size size = images[0].size();
+	int sum_x = 0, sum_y = 0;
+	for(int i = 0; i < images.size(); i++)
+	{
+		sum_x += get<0>(shifts[i]);
+		sum_y += get<1>(shifts[i]);
+	}
+	int center_x = copysign(fabs(sum_x) / images.size(), sum_x);
+	int center_y = copysign(fabs(sum_y) / images.size(), sum_y);
+	for(int i = 0; i < images.size(); i++)
+	{
+		get<0>(shifts[i]) -= center_x;
+		get<1>(shifts[i]) -= center_y;
+	}
+	int left = 0, right = 0, top = 0, bottom = 0;
+	for(int i = 0; i < images.size(); i++)
+	{
+		if(get<0>(shifts[i]) >= 0)
+			left = max(left, get<0>(shifts[i]));
+		else
+			right = max(right, -get<0>(shifts[i]));
+		if(get<1>(shifts[i]) >= 0)
+			bottom = max(bottom, get<1>(shifts[i]));
+		else
+			top = max(top, -get<1>(shifts[i]));
+	}
+	size.width -= left+right;
+	size.height -= top+bottom;
+	for(int i = 0; i < images.size(); i++)
+	{
+		Rect roi = Rect(left-get<0>(shifts[i]), top+get<1>(shifts[i]),0,0) + size;
+		located_images.push_back(images[i](roi));
+	}
+	return;
+}
+
+void writeLocateImages(string path, vector<Mat> &imgs)
+{
+	path += "/";
+	ifstream list_file((path+"list.txt").c_str());
+	string name;
+	float time;
+	int i = 0;
+	while(list_file >> name >> time)
+	{
+		imwrite(path+"located_"+name, imgs[i]);
+		i++;
+	}
+	list_file.close();
 	return;
 }
