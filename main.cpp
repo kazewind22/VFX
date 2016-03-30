@@ -8,50 +8,33 @@
 #include <tuple>
 
 #define TOLERANCE 6
-#define MAX_SHIFT_BIT 4
+#define MAX_SHIFT_BIT 6
 
 using namespace cv;
 using namespace std;
 
 void loadExposureSeq(string path, vector<Mat> &images, vector<float> &times);
+void MTBalignement(const vector<Mat> &images, vector<Mat> &aligned_images);
 void ImageShrink(const Mat& img, Mat& ret);
 void ComputeBitmaps(const Mat& img, Mat& tb, Mat& eb);
 void BitmapShift(const Mat& bm, int x, int y, Mat& bm_ret);
 int BitmapTotal(const Mat& bm);
 void GetExpShift(const Mat& img1, const Mat& img2, int shift_bits, int shift_ret[2]);
-void LocateImages(const vector<Mat> &images, vector<Mat> &located_images, vector<tuple<int,int>> &shifts);
-void writeLocateImages(string path, vector<Mat> &imgs);
+void AlignedImages(const vector<Mat> &images, vector<Mat> &aligned_images, vector<tuple<int,int>> &shifts);
+void writeAlignedImages(string path, vector<Mat> &imgs);
 
 int main(int argc, char** argv)
 {
 	string path = argv[1];
 
 	vector<Mat> images;
-	vector<Mat> g_images;
-	vector<Mat> l_images;
+	vector<Mat> aligned_images;
 	vector<float> times;
-
 	loadExposureSeq(path, images, times);
 
-	for(int i = 0; i < images.size(); i++)
-	{
-		Mat gray;
-		cvtColor(images[i], gray, COLOR_RGB2GRAY);
-		g_images.push_back(gray);
-	}
+	MTBalignement(images, aligned_images);
 
-	vector<tuple<int,int>> shifts;
-	shifts.push_back(make_tuple(0,0));
-	for(int i = 1; i < g_images.size(); i++)
-	{
-		int shift_ret[2];
-		GetExpShift(g_images[0], g_images[i], MAX_SHIFT_BIT, shift_ret);
-		shifts.push_back(make_tuple(shift_ret[0],shift_ret[1]));
-	}
-
-	LocateImages(images, l_images, shifts);
-
-	writeLocateImages(path, l_images);
+	writeAlignedImages(path, aligned_images);
 
 	return 0;
 }
@@ -70,6 +53,31 @@ void loadExposureSeq(string path, vector<Mat> &images, vector<float> &times)
 	}
 	list_file.close();
 	return;
+}
+
+void MTBalignement(const vector<Mat> &images, vector<Mat> &aligned_images)
+{
+	vector<Mat> gray_images;
+	vector<Mat> _aligned_images;
+	for(int i = 0; i < images.size(); i++)
+	{
+		Mat gray;
+		cvtColor(images[i], gray, COLOR_RGB2GRAY);
+		gray_images.push_back(gray);
+	}
+
+	vector<tuple<int,int>> shifts;
+	shifts.push_back(make_tuple(0,0));
+	for(int i = 1; i < gray_images.size(); i++)
+	{
+		int shift_ret[2];
+		GetExpShift(gray_images[0], gray_images[i], MAX_SHIFT_BIT, shift_ret);
+		shifts.push_back(make_tuple(shift_ret[0],shift_ret[1]));
+	}
+
+	AlignedImages(images, _aligned_images, shifts);
+
+	aligned_images = _aligned_images;
 }
 
 void ImageShrink(const Mat& img, Mat& ret)
@@ -198,7 +206,7 @@ void GetExpShift(const Mat& img1, const Mat& img2, int shift_bits, int shift_ret
 	return;
 }
 
-void LocateImages(const vector<Mat> &images, vector<Mat> &located_images, vector<tuple<int,int>> &shifts)
+void AlignedImages(const vector<Mat> &images, vector<Mat> &aligned_images, vector<tuple<int,int>> &shifts)
 {
 	Size size = images[0].size();
 	int sum_x = 0, sum_y = 0;
@@ -231,12 +239,13 @@ void LocateImages(const vector<Mat> &images, vector<Mat> &located_images, vector
 	for(int i = 0; i < images.size(); i++)
 	{
 		Rect roi = Rect(left-get<0>(shifts[i]), top+get<1>(shifts[i]),0,0) + size;
-		located_images.push_back(images[i](roi));
+		cout << roi << endl;
+		aligned_images.push_back(images[i](roi));
 	}
 	return;
 }
 
-void writeLocateImages(string path, vector<Mat> &imgs)
+void writeAlignedImages(string path, vector<Mat> &imgs)
 {
 	path += "/";
 	ifstream list_file((path+"list.txt").c_str());
@@ -245,7 +254,7 @@ void writeLocateImages(string path, vector<Mat> &imgs)
 	int i = 0;
 	while(list_file >> name >> time)
 	{
-		imwrite(path+"located_"+name, imgs[i]);
+		imwrite(path+"aligned_"+name, imgs[i]);
 		i++;
 	}
 	list_file.close();

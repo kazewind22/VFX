@@ -26,7 +26,7 @@ int main(int, char**argv)
 	merge_debevec->process(images, hdr, times, response);
 
 	Mat ldr;
-	Ptr<TonemapDurand> tonemap = createTonemapDurand(2.2f);
+	Ptr<TonemapDurand> tonemap = createTonemapDurand(1.0f);
 	tonemap->process(hdr, ldr);
 
 	Mat fusion;
@@ -47,7 +47,7 @@ void loadExposureSeq(String path, vector<Mat>& images, vector<float>& times)
 	string name;
 	float val;
 	while(list_file >> name >> val) {
-		Mat img = imread(path + name);
+		Mat img = imread(path + "aligned_" + name);
 		images.push_back(img);
 		times.push_back(1 / val);
 	}
