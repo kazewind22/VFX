@@ -1,4 +1,4 @@
-project = 'ladder'
+project = 'library'
 path = strcat('./',project,'/');
 
 fid = fopen(strcat(path,'list.txt'),'r');
@@ -37,10 +37,10 @@ P = size(images,1);
 height = size(images{1},1);
 width = size(images{1},2);
 
-
 B = log(time);
 
 HDRimage = zeros(size(images{1}));
+G = [];
 for color = 1:3
     Z = zeros(N,P,3);
     for i = 1:N

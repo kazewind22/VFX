@@ -1,0 +1,28 @@
+1. Tested Enviroment:
+	Mac OS X 10.11.3
+
+2. Language:
+	C++11, Matlab
+
+3. Library dependency:
+	Opencv 3.1.0
+	pkg-config (optional)
+
+4. Original photos:
+	library directory (with a list.txt to record exposure time)
+
+5. HDR image:
+	library/library.hdr
+
+6. Tone-mapped image:
+	library/library.jpg (tone-mapped by Matlab function)
+	output/library.hdr.jpg (tone-mapped by self-implement tone-mapping function)
+
+7. Report:
+	vfx-project1.pdf
+
+8. Instruction:
+	You may use ``Makefile'' to make and run alignment and tone-mapping.
+	1. ``make run_mtb'' for auto alignment on library photos. (./mtb library)
+	2. Run hdr.m to generate the hdr file and Matlab tone-mapped jpg file.
+	3. ``make run_tonemap'' for auto tone-mapping. (./tonemap library/library.hdr)
