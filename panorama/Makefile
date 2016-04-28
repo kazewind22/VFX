@@ -8,7 +8,7 @@ feature : feature.cpp
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^
 
 run : feature
-	./feature parrington/prtn01.jpg
+	./feature parrington
 
 clean :
 	rm -f feature
