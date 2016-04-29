@@ -165,7 +165,7 @@ void featureDescriptor(const vector<tuple<int, int>> &keypoints, const Mat &Io, 
 		int y = get<0>(keypoints[index]);
 		int x = get<1>(keypoints[index]);
 		array<int, 128> count={0};
-		int block[4] = {8, 4, -1, -5};
+		int block[4] = {-8, -4, 1, 5};
 		for(int by = 0; by < 4; by++)
 		{
 			int y_ = y + block[by];
