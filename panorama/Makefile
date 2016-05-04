@@ -1,6 +1,6 @@
 CXX = g++
-LDFLAGS = `pkg-config --libs opencv` -L/usr/local/opt/lapack/lib
-CXXFLAGS = `pkg-config --cflags opencv` -I/usr/local/opt/lapack/include -std=c++0x
+LDFLAGS = `pkg-config --libs opencv`
+CXXFLAGS = `pkg-config --cflags opencv` -std=c++0x
 
 all : feature
 
