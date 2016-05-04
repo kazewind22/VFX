@@ -12,6 +12,8 @@
 using namespace cv;
 using namespace std;
 
+int THRESH = 100000;
+
 typedef struct feat
 {
 	int num = 0;
@@ -20,11 +22,11 @@ typedef struct feat
 } Feat;
 
 void loadImageSeq(string path, vector<Mat> &images, vector<float> &focalLengths);
-void cylindricalWarping(const Mat &src, Mat &dst, float f);
+void cylindricalWarping(const Mat &src, Mat &dst, Mat &mask, float f);
 void gradI(const Mat &src, Mat &Ix, Mat &Iy, Mat &Io);
 double ResponseFunction(const Mat &M, const double k);
 void featureDescriptor(const vector<tuple<int, int>> &keypoints, const Mat &Io, vector<array<int,128>> &descriptors);
-void getFeatures(const Mat &img, Feat &feat);
+void getFeatures(const Mat &img, Feat &feat, const Mat &mask = Mat());
 double cosineSimilarity(const array<int, 128> des1, const array<int, 128> des2);
 void featureMatching(const Feat &feat1, const Feat &feat2, vector<array<int,2>> &matchs);
 void combine2Images(const Mat &src1, const Mat &src2, Mat &dst);
@@ -35,54 +37,63 @@ int main(int argc, char** argv)
 	vector<Mat> images;
 	vector<float> focalLengths;
 	vector<Mat> warped_imgs;
+	vector<Mat> masks;
 
 	loadImageSeq(path, images, focalLengths);
 
 	for(int i = 0; i < images.size(); i++)
 	{
 		Mat cylindrical;
-		cylindricalWarping(images[i], cylindrical, focalLengths[i]);
+		Mat mask;
+		cylindricalWarping(images[i], cylindrical, mask, focalLengths[i]);
 		warped_imgs.push_back(cylindrical);
+		masks.push_back(mask);
 	}
+//	imshow("mask", masks[0]);
 
 	Feat feat1;
 	Feat feat2;
 
-	images[0] = warped_imgs[0];
-	images[1] = warped_imgs[1];
-
-	getFeatures(images[0], feat1);
-	getFeatures(images[1], feat2);
+	Mat img1 = warped_imgs[1];
+	Mat img2 = warped_imgs[2];
+	Mat mask1 = masks[1];
+	Mat mask2 = masks[2];
+	Mat mask(img1.rows, img1.cols, CV_8UC1, Scalar::all(1));
+	getFeatures(img1, feat1, masks[1]);
+	getFeatures(img2, feat2, masks[2]);
 
 	for(int index = 0; index < feat1.num; index++)
 	{
 		int i = get<0>(feat1.keypoints[index]);
 		int j = get<1>(feat1.keypoints[index]);
-		circle(images[0],Point(j,i),2,Scalar(22));
+		circle(img1,Point(j,i),2,Scalar(255,255,255));
 	}
 
 	for(int index = 0; index < feat2.num; index++)
 	{
 		int i = get<0>(feat2.keypoints[index]);
 		int j = get<1>(feat2.keypoints[index]);
-		circle(images[1],Point(j,i),2,Scalar(22));
+		circle(img2,Point(j,i),2,Scalar(0,0,0));
 	}
-	//imshow("images[0]",images[0]);
-	//imshow("images[1]", images[1]);
+	//imshow("img1",img1);
+	//imshow("img2", img2);
 
 	vector<array<int,2>> matchs;
 	featureMatching(feat1, feat2, matchs);
 
 	Mat match;
-	combine2Images(images[1],images[0],match);
+	combine2Images(img2,img1,match);
+
 	for(int i = 0; i < matchs.size(); i++)
 	{
-		int x1 = get<1>(feat1.keypoints[matchs[i][0]])+images[1].cols;
+		int x1 = get<1>(feat1.keypoints[matchs[i][0]])+img2.cols;
 		int y1 = get<0>(feat1.keypoints[matchs[i][0]]);
 		int x2 = get<1>(feat2.keypoints[matchs[i][1]]);
 		int y2 = get<0>(feat2.keypoints[matchs[i][1]]);
 		line(match, Point(x1, y1), Point(x2, y2), Scalar(rand()%256,rand()%256,rand()%256));
 	}
+
+	namedWindow("match", CV_WINDOW_AUTOSIZE);
 	imshow("match", match);
 
 	waitKey(0);
@@ -105,9 +116,10 @@ void loadImageSeq(string path, vector<Mat> &images, vector<float> &times)
 	return;
 }
 
-void cylindricalWarping(const Mat &src, Mat &dst, float f)
+void cylindricalWarping(const Mat &src, Mat &dst, Mat &mask, float f)
 {
 	Mat result(src.rows, src.cols, src.type(), Scalar::all(0));
+	mask = Mat(src.rows, src.cols, CV_8UC1, Scalar::all(255));
 	int xc = src.cols/2;
 	int yc = src.rows/2;
 	for(int y = 0; y < src.rows; y++)
@@ -121,6 +133,20 @@ void cylindricalWarping(const Mat &src, Mat &dst, float f)
 			y_ += yc - 1;
 			if(x_ >= 0.0 && x_ < src.cols && y_ >= 0.0 && y_ < src.rows)
 				result.at<Vec3b>(y, x) = src.at<Vec3b>(y_, x_);
+			else
+			{
+				for(int i = -2; i <= 2; i++)
+				{
+					if(x+i < 0 || x+i > src.cols)
+						continue;
+					for(int j = -2; j <= 2; j++)
+					{
+						if(y+j < 0 || y+j > src.rows)
+							continue;
+						mask.at<uchar>(y+j, x+i) = 0;
+					}
+				}
+			}
 		}
 	dst = result;
 }
@@ -185,7 +211,7 @@ void featureDescriptor(const vector<tuple<int, int>> &keypoints, const Mat &Io, 
 	}
 }
 
-void getFeatures(const Mat &img, Feat &feat)
+void getFeatures(const Mat &img, Feat &feat, const Mat &mask)
 {
 	Mat gimg;
 	cvtColor(img, gimg, COLOR_RGB2GRAY);
@@ -209,6 +235,11 @@ void getFeatures(const Mat &img, Feat &feat)
 			R.at<double>(i,j) = ResponseFunction(M,0.04);
 		}
 
+	Mat mask_;
+	if(mask.empty())
+		mask_ = Mat(img.size(), CV_8UC1, Scalar::all(1));
+	else
+		mask_ = mask;
 	feat.keypoints.clear();
 	for(int i = 9; i < img.rows-9; i++)
 		for(int j = 9; j < img.cols-9; j++)
@@ -217,7 +248,7 @@ void getFeatures(const Mat &img, Feat &feat)
 			   R.at<double>(i,j) > R.at<double>(i+1,j) &&
 			   R.at<double>(i,j) > R.at<double>(i,j-1) &&
 			   R.at<double>(i,j) > R.at<double>(i,j+1) &&
-			   R.at<double>(i,j) > 100000)
+			   mask_.at<uchar>(i,j) > 0 && R.at<double>(i,j) > THRESH)
 			{
 				feat.keypoints.push_back(make_tuple(i,j));
 				feat.num++;
@@ -259,11 +290,9 @@ void featureMatching(const Feat &feat1, const Feat &feat2, vector<array<int,2>> 
 		if(max_score > 0.85)
 		{
 			array<int,2> match = {i, max_index};
-			//cout << match[0] << " " << match[1] << " " << max_score << endl;
 			matchs.push_back(match);
 		}
 	}
-	//cout << matchs.size() << endl;
 }
 
 void combine2Images(const Mat &src1, const Mat &src2, Mat &dst)
