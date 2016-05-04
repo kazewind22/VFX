@@ -1,0 +1,7 @@
+square00.jpg 509.071
+square01.jpg 508.632
+square02.jpg 509.075
+square03.jpg 511.137
+square04.jpg 512.518
+square05.jpg 512.657
+square06.jpg 512.541
