@@ -1,14 +1,15 @@
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 CXX = g++
-LDFLAGS = `pkg-config --libs opencv` -L/usr/local/opt/lapack/lib
-CXXFLAGS = `pkg-config --cflags opencv` -I/usr/local/opt/lapack/include -std=c++0x
+LDFLAGS = `pkg-config --libs opencv` -L/usr/local/lib
+CXXFLAGS = `pkg-config --cflags opencv` -I/usr/local/include -std=c++0x
 
-all : feature
+all: feature
 
-feature : feature.cpp
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^
+feature: feature.cpp
+	$(CXX) -g $(CXXFLAGS) $(LDFLAGS) -o $@ $^
 
-run : feature
-	./feature parrington
+run: feature
+	./feature square 85 16
 
-clean :
+clean:
 	rm -f feature
