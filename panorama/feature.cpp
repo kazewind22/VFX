@@ -14,8 +14,11 @@
 using namespace cv;
 using namespace std;
 
-double FILTER;
+double PURE_THRESH;
 double MATCH_THRESH;
+int right_x;
+int left_x;
+
 
 int THRESH = 100000;
 
@@ -38,12 +41,17 @@ double cosineSimilarity(const tuple<int, int> v1, const tuple<int, int> v2);
 void featureMatching(const Feat &feat1, const Feat &feat2, vector<array<int,2>> &matches);
 void combine2Images(const Mat &src1, const Mat &src2, Mat &dst);
 void detectOutliers(const int offset, const int width, const Feat &feat1, const Feat &feat2, const vector<array<int,2>> &matches, vector<array<int,2>> &puredMatches);
+void transformation(const vector<Feat> &feats, const vector<array<int,2>> &puredMatches, Mat &_M, Mat &M, int imgIndex);
 void stitchImages(const Mat &src1, const Mat &src2, const Mat &M, Mat &dst);
+void refineImage(int origin_y,const Mat &src, Mat &dst);
+void output(Mat &stitchedImage, char* name, char* para1, char* para2);
+void output_refine(Mat &stitchedImage, char* name, char* para1, char* para2, int width);
 
 int main(int argc, char** argv)
 {
 	string path = argv[1];
 	MATCH_THRESH = atof(argv[2])/100;
+	PURE_THRESH = atof(argv[3])/20;
 	vector<Mat> images;
 	vector<float> focalLengths;
 	vector<Mat> warped_imgs;
@@ -64,6 +72,7 @@ int main(int argc, char** argv)
 	Mat img1;
 	Mat img2;
 	Mat match;
+	// This _M is used to record tranformation matrix 
 	Mat _M(3,3,CV_64FC1,Scalar::all(0));
 	_M.at<double>(0,0)=1;
 	_M.at<double>(1,1)=1;
@@ -93,10 +102,16 @@ int main(int argc, char** argv)
 			int j = get<1>(feats[imgIndex].keypoints[index]);
 			circle(img2,Point(j,i),2,Scalar(22));
 		}
+	
 
-		cout << "featsure matching" << endl;
+		cout << "feature matching" << endl;
 		vector<array<int,2>> matches;
 		featureMatching(feats[imgIndex-1], feats[imgIndex], matches);
+		
+		cout << "detect outliers" << endl;
+		vector<array<int,2>> puredMatches;
+		detectOutliers(img2.cols, img1.cols, feats[imgIndex-1], feats[imgIndex], matches, puredMatches);
+	
 		combine2Images(img2,img1,match);
 		for(int i = 0; i < matches.size(); i++)
 		{
@@ -108,7 +123,7 @@ int main(int argc, char** argv)
 		}
 
 		// ostringstream stringStreamM;
-		// stringStreamM << argv[1] << "_output/" << imgIndex <<"_iter_" << argv[1] << "_match.jpg";
+		// stringStreamM << argv[1] << "_output/" << imgIndex <<"_iter_" << argv[2] << argv[3] << "_match.jpg";
 		// string nameMatch= stringStreamM.str();
 		// imwrite(nameMatch,match);
 		
@@ -120,9 +135,8 @@ int main(int argc, char** argv)
 			cylindricalWarping(images[imgIndex], cylindrical, mask, feats[imgIndex], focalLengths[imgIndex]);
 			warped_imgs.push_back(cylindrical);
 			masks.push_back(mask);
-			image = warped_imgs[images.size()-1-imgIndex].clone();
+			image = images[	imgIndex].clone();
 		}
-
 
 		Mat cylindrical;
 		Mat mask;
@@ -132,23 +146,19 @@ int main(int argc, char** argv)
 
 		img1 = warped_imgs[images.size()-1-(imgIndex-1)].clone();
 		img2 = warped_imgs[images.size()-1-imgIndex].clone();	
-
-		cout << "detect outliers" << endl;
-		vector<array<int,2>> puredMatches;
-		detectOutliers(img2.cols, img1.cols, feats[imgIndex-1], feats[imgIndex], matches, puredMatches);
-	
+		
 		for(int index = 0; index < feats[imgIndex-1].num; index++)
 		{
 			int i = get<0>(feats[imgIndex-1].keypoints[index]);
 			int j = get<1>(feats[imgIndex-1].keypoints[index]);
-			circle(img1,Point(j,i),2,Scalar::all(22));
+			// circle(img1,Point(j,i),2,Scalar::all(22));
 		}
 
 		for(int index = 0; index < feats[imgIndex].num; index++)
 		{
 			int i = get<0>(feats[imgIndex].keypoints[index]);
 			int j = get<1>(feats[imgIndex].keypoints[index]);
-			circle(img2,Point(j,i),2,Scalar::all(22));
+			// circle(img2,Point(j,i),2,Scalar::all(22));
 		}
 	
 
@@ -164,46 +174,15 @@ int main(int argc, char** argv)
 		}
 
 		// ostringstream ss;
-		// ss << argv[1] << "_output/" << imgIndex <<"_iter_" << argv[1] << "_warped_match.jpg";
+		// ss << argv[1] << "_output/" << imgIndex <<"_iter_" << argv[2] << argv[3] << "_warped_match.jpg";
 		// string nameWarpedMatch = ss.str();
 		// imwrite(nameWarpedMatch,match_warp);
-		
 
-		vector<Point2f> obj;
-		vector<Point2f> scene;
-		for( int i = 0; i < puredMatches.size(); i++ )
-		{	
-			Point2f a(get<1>(feats[imgIndex-1].keypoints[puredMatches[i][0]]), get<0>(feats[imgIndex-1].keypoints[puredMatches[i][0]]));
-			Point2f b(get<1>(feats[imgIndex].keypoints[puredMatches[i][1]]), get<0>(feats[imgIndex].keypoints[puredMatches[i][1]]));
-			//-- Get the keypoints from the good matches
-			obj.push_back(b);
-			scene.push_back(a);
-		}
-
+		Mat M;
 		cout << "transforamtion matrix" << endl;
-		Mat objVector = Mat(puredMatches.size(),3,CV_64F,Scalar::all(0));
-		Mat sceneVector = Mat(puredMatches.size(),3,CV_64F,Scalar::all(0));
-		for(int i = 0; i < puredMatches.size(); i++)
-		{
-			objVector.at<double>(i,0) = obj[i].x;
-			objVector.at<double>(i,1) = obj[i].y;
-			objVector.at<double>(i,2) = 1;
-			sceneVector.at<double>(i,0) = scene[i].x;
-			sceneVector.at<double>(i,1) = scene[i].y;
-			sceneVector.at<double>(i,2) = 1;
-		}
-		
-		Mat tmpM;
-		// = findHomography(sceneVector,objVector,CV_RANSAC);
-		solve(sceneVector, objVector, tmpM, DECOMP_NORMAL );
-		tmpM = tmpM.t();
-
-		Mat M = _M*tmpM;
-
-		_M = M;
+		transformation(feats, puredMatches, _M, M, imgIndex);
 		
 		cout << "image stitching" << endl;
-		
 		stitchImages(image,img1,M,stitchedImage);
 	
 		// ostringstream sss;
@@ -212,17 +191,87 @@ int main(int argc, char** argv)
 		// imwrite(stitchName,stitchedImage);
 
 	}
-
-	cout << "stitch size: " << stitchedImage.size() << endl;
-
-	ostringstream s;
-	s << argv[1] << "_output/" << argv[1] << argv[2] << "_stitched.jpg";
-	string stitchName= s.str();
-	imwrite(stitchName,stitchedImage);
-
+	output(stitchedImage, argv[1], argv[2], argv[3]);
+	output_refine(stitchedImage, argv[1], argv[2], argv[3], images[0].rows);
 	// imshow("match", stitchedImage);
 	// waitKey(0);
 	return 0;
+}
+
+void output_refine(Mat &stitchedImage, char* name, char* para1, char* para2, int width)
+{
+	Mat refinedImage;
+	refineImage(width,stitchedImage,refinedImage);
+	cout << "stitch size: " << refinedImage.size() << endl;
+	ostringstream s;
+	s << name << "_output/" << name << para1 << para2 << "_stitched.jpg";
+	string stitchName= s.str();
+	imwrite(stitchName,stitchedImage);
+
+}
+
+void output(Mat &stitchedImage, char* name, char* para1, char* para2)
+{
+	cout << "refined stitch size: " << stitchedImage.size() << endl;
+	ostringstream s;
+	s << name << "_output/" << name << para1 << para2 << "_stitched.jpg";
+	string stitchName= s.str();
+	imwrite(stitchName,stitchedImage);
+
+}
+
+void transformation(const vector<Feat> &feats, const vector<array<int,2>> &puredMatches, Mat &_M, Mat &M, int imgIndex)
+{
+	vector<Point2f> obj;
+	vector<Point2f> scene;
+	for( int i = 0; i < puredMatches.size(); i++ )
+	{	
+		Point2f a(get<1>(feats[imgIndex-1].keypoints[puredMatches[i][0]]), get<0>(feats[imgIndex-1].keypoints[puredMatches[i][0]]));
+		Point2f b(get<1>(feats[imgIndex].keypoints[puredMatches[i][1]]), get<0>(feats[imgIndex].keypoints[puredMatches[i][1]]));
+		//-- Get the keypoints from the good matches
+		obj.push_back(b);
+		scene.push_back(a);
+	}
+
+	Mat objVector = Mat(puredMatches.size(),3,CV_64F,Scalar::all(0));
+	Mat sceneVector = Mat(puredMatches.size(),3,CV_64F,Scalar::all(0));
+	for(int i = 0; i < puredMatches.size(); i++)
+	{
+		objVector.at<double>(i,0) = obj[i].x;
+		objVector.at<double>(i,1) = obj[i].y;
+		objVector.at<double>(i,2) = 1;
+		sceneVector.at<double>(i,0) = scene[i].x;
+		sceneVector.at<double>(i,1) = scene[i].y;
+		sceneVector.at<double>(i,2) = 1;
+	}
+	
+	Mat tmpM;
+	// = findHomography(sceneVector,objVector,CV_RANSAC);
+	solve(sceneVector, objVector, tmpM, DECOMP_NORMAL );
+	tmpM = tmpM.t();
+	M = _M*tmpM;
+	_M = M;
+}
+
+
+void refineImage(int origin_y, const Mat &src, Mat &dst)
+{
+	// double m = (double)(src.rows - origin_y)/(double)src.cols;
+	double m = 0;	
+	// cout << "src rows: "<< src.rows << "origin_y: " << origin_y << "m = " << m << endl;
+	Mat result(origin_y*0.9, src.cols*0.95, CV_8UC3, Scalar::all(0));
+	for (int x = 0; x < result.cols; x++)
+	{	
+		int drift = x*m;
+		for (int y = 0; y < result.rows; y++)
+		{	
+			int _x = x + 0.01 * src.cols;
+			int _y = y + drift + 0.05 * origin_y;
+			if(_y >= 0 && _y < src.rows && _x >=0 && _x < src.cols)
+				result.at<Vec3b>(y,x) = src.at<Vec3b>(_y,_x);
+		}	
+	}
+	dst = result;
 }
 
 void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
@@ -233,8 +282,8 @@ void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
 	Mat scr2Index = Mat(src2.rows,src2.cols,CV_32FC2,Scalar::all(0));
 	double max_x = 0; 
 	double max_y = 0;
-	double min_x = 10000; 
-	double min_y = 10000;
+	double min_x = 1000000; 
+	double min_y = 1000000;
 	for(int i = 0; i < src2.rows; i++)
 	{
 		for(int j = 0; j < src2.cols; j++)
@@ -249,7 +298,10 @@ void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
 			if(scr2Index.at<Vec2f>(i,j).val[1]<min_y)
 				min_y = scr2Index.at<Vec2f>(i,j).val[1];
 		}
+		left_x = min_x;
 	}
+
+	right_x = src1.cols;
 
 	Mat result(max(src1.rows, (int)max_y)+1, (int)max_x+1, CV_8UC3,Scalar::all(0));
 
@@ -257,7 +309,7 @@ void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
 	{
 		for(int j = 0; j < result.cols; j++)
 		{	
-			//Forward warping not good we have to do inverse warping.
+			//Forward warping not good, we use inverse warping.
 			double y = (T.at<double>(1,0)*j+T.at<double>(1,1)*i+T.at<double>(1,2));
 			double x = (T.at<double>(0,0)*j+T.at<double>(0,1)*i+T.at<double>(0,2));
 			if(y >= 0 && y < src2.rows && x >= 0 && x < src2.cols)
@@ -326,21 +378,33 @@ void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
 	{
 		for(int x = 0; x < src1.cols; x++)
 		{	
-			// if(src1.at<Vec3b>(y,x).val[0]==0 && src1.at<Vec3b>(y,x).val[1]==0 && src1.at<Vec3b>(y,x).val[2]==0)
-			// {
-			// 	if(result.at<Vec3b>(y,x).val[0]!=0 && result.at<Vec3b>(y,x).val[1]!=0 && result.at<Vec3b>(y,x).val[2]!=0)
-			// 	{
-			// 		fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
-			// 	}
-			// }
-
-			// kind of blending, stitch better, but have ghost
-			double result_distance = result.at<Vec3b>(y,x).val[2]*0.299 + result.at<Vec3b>(y,x).val[1]*0.587 + result.at<Vec3b>(y,x).val[0]*0.114; 
-			double src1_distance = src1.at<Vec3b>(y,x).val[2]*0.299 + src1.at<Vec3b>(y,x).val[1]*0.587 + src1.at<Vec3b>(y,x).val[0]*0.114; 
-			if(result_distance > src1_distance)
+			if(src1.at<Vec3b>(y,x).val[0]!=0 && src1.at<Vec3b>(y,x).val[1]!=0 && src1.at<Vec3b>(y,x).val[2]!=0)
+			{
+				if(result.at<Vec3b>(y,x).val[0]!=0 && result.at<Vec3b>(y,x).val[1]!=0 && result.at<Vec3b>(y,x).val[2]!=0)
+				{
+					fixMask.at<Vec3b>(y,x).val[0] += result.at<Vec3b>(y,x).val[0]*(x-left_x)/(right_x-left_x);
+					fixMask.at<Vec3b>(y,x).val[0] += src1.at<Vec3b>(y,x).val[0]*(right_x-x)/(right_x-left_x);
+					fixMask.at<Vec3b>(y,x).val[1] += result.at<Vec3b>(y,x).val[1]*(x-left_x)/(right_x-left_x);
+					fixMask.at<Vec3b>(y,x).val[1] += src1.at<Vec3b>(y,x).val[1]*(right_x-x)/(right_x-left_x);
+					fixMask.at<Vec3b>(y,x).val[2] += result.at<Vec3b>(y,x).val[2]*(x-left_x)/(right_x-left_x);
+					fixMask.at<Vec3b>(y,x).val[2] += src1.at<Vec3b>(y,x).val[2]*(right_x-x)/(right_x-left_x);
+					// if(right_x - x > x - left_x)
+					// 	fixMask.at<Vec3b>(y,x) = src1.at<Vec3b>(y,x);
+					// else
+					// 	fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
+				}
+			}
+			else
 			{
 				fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
 			}
+
+			// double result_distance = result.at<Vec3b>(y,x).val[2]*0.299 + result.at<Vec3b>(y,x).val[1]*0.587 + result.at<Vec3b>(y,x).val[0]*0.114; 
+			// double src1_distance = src1.at<Vec3b>(y,x).val[2]*0.299 + src1.at<Vec3b>(y,x).val[1]*0.587 + src1.at<Vec3b>(y,x).val[0]*0.114; 
+			// if(result_distance > src1_distance)
+			// {
+			// 	fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
+			// }
 		}
 	}
 
@@ -423,9 +487,12 @@ void detectOutliers(const int offset, const int width, const Feat &feat1, const 
 	{	
 		int tmp = 0;
 		for(int j = 0; j < matches.size(); j++)
-		{
-			tmp += abs(get<0>(moveVector[i])-get<0>(moveVector[j]));
-			tmp += abs(get<1>(moveVector[i])-get<1>(moveVector[j]));
+		{	
+			int tmp_a = 0;
+			int tmp_b = 0;
+			tmp_a = abs(get<0>(moveVector[i])-get<0>(moveVector[j])) * abs(get<0>(moveVector[i])-get<0>(moveVector[j]));
+			tmp_b = abs(get<1>(moveVector[i])-get<1>(moveVector[j])) * abs(get<1>(moveVector[i])-get<1>(moveVector[j])); 
+			tmp = (int)sqrt(tmp_a+tmp_b);
 		}
 		//cout << tmp << endl;
 		score.push_back(make_tuple(i,tmp));
@@ -436,7 +503,7 @@ void detectOutliers(const int offset, const int width, const Feat &feat1, const 
     });
 
 	// 0.05 parrington best
-    for(int i = 0; i < matches.size()*0.05; i++)
+    for(int i = 0; i < matches.size()*PURE_THRESH; i++)
     {
 		//cout << get<1>(score[i]) << endl;	
 		puredMatches.push_back(matches[get<0>(score[i])]);	
@@ -611,7 +678,7 @@ void getFeatures(const Mat &img, Feat &feat)
 		{
 			return get<0>(t1) > get<0>(t2);
 		});
-	for(int i = 0; i < 10000; i++)
+	for(int i = 0;i < scores.size(); i++)
 	{
 		feat.keypoints.push_back(make_tuple(get<1>(scores[i]), get<2>(scores[i])));
 		feat.num++;
