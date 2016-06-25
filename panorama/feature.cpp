@@ -80,12 +80,7 @@ int main(int argc, char** argv)
 
 
 	for(int imgIndex = images.size()-1; imgIndex >= 1; imgIndex--){
-		if(imgIndex == images.size()-1)
-			image = images[imgIndex].clone();
-		else
-			image = stitchedImage;
 		cout << images.size()-imgIndex << "th iter" << endl;
-
 		img1 = images[imgIndex-1].clone();
 		img2 = images[imgIndex].clone();	
 
@@ -135,8 +130,10 @@ int main(int argc, char** argv)
 			cylindricalWarping(images[imgIndex], cylindrical, mask, feats[imgIndex], focalLengths[imgIndex]);
 			warped_imgs.push_back(cylindrical);
 			masks.push_back(mask);
-			image = images[	imgIndex].clone();
+			image = warped_imgs[0].clone();
 		}
+		else
+			image = stitchedImage;
 
 		Mat cylindrical;
 		Mat mask;
@@ -204,9 +201,9 @@ void output_refine(Mat &stitchedImage, char* name, char* para1, char* para2, int
 	refineImage(width,stitchedImage,refinedImage);
 	cout << "stitch size: " << refinedImage.size() << endl;
 	ostringstream s;
-	s << name << "_output/" << name << para1 << para2 << "_stitched.jpg";
+	s << name << "_output/" << name << para1 << para2 << "_refined.jpg";
 	string stitchName= s.str();
-	imwrite(stitchName,stitchedImage);
+	imwrite(stitchName,refinedImage);
 
 }
 
@@ -378,33 +375,36 @@ void stitchImages(const Mat &src1, const Mat &src2,const Mat &M, Mat &dst)
 	{
 		for(int x = 0; x < src1.cols; x++)
 		{	
-			if(src1.at<Vec3b>(y,x).val[0]!=0 && src1.at<Vec3b>(y,x).val[1]!=0 && src1.at<Vec3b>(y,x).val[2]!=0)
+			if(x>900)
 			{
-				if(result.at<Vec3b>(y,x).val[0]!=0 && result.at<Vec3b>(y,x).val[1]!=0 && result.at<Vec3b>(y,x).val[2]!=0)
+				if(src1.at<Vec3b>(y,x).val[0]!=0 && src1.at<Vec3b>(y,x).val[1]!=0 && src1.at<Vec3b>(y,x).val[2]!=0)
 				{
-					fixMask.at<Vec3b>(y,x).val[0] += result.at<Vec3b>(y,x).val[0]*(x-left_x)/(right_x-left_x);
-					fixMask.at<Vec3b>(y,x).val[0] += src1.at<Vec3b>(y,x).val[0]*(right_x-x)/(right_x-left_x);
-					fixMask.at<Vec3b>(y,x).val[1] += result.at<Vec3b>(y,x).val[1]*(x-left_x)/(right_x-left_x);
-					fixMask.at<Vec3b>(y,x).val[1] += src1.at<Vec3b>(y,x).val[1]*(right_x-x)/(right_x-left_x);
-					fixMask.at<Vec3b>(y,x).val[2] += result.at<Vec3b>(y,x).val[2]*(x-left_x)/(right_x-left_x);
-					fixMask.at<Vec3b>(y,x).val[2] += src1.at<Vec3b>(y,x).val[2]*(right_x-x)/(right_x-left_x);
-					// if(right_x - x > x - left_x)
-					// 	fixMask.at<Vec3b>(y,x) = src1.at<Vec3b>(y,x);
-					// else
-					// 	fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
+					if(result.at<Vec3b>(y,x).val[0]!=0 && result.at<Vec3b>(y,x).val[1]!=0 && result.at<Vec3b>(y,x).val[2]!=0)
+					{
+						fixMask.at<Vec3b>(y,x).val[0] += result.at<Vec3b>(y,x).val[0]*(x-left_x)/(right_x-left_x);
+						fixMask.at<Vec3b>(y,x).val[0] += src1.at<Vec3b>(y,x).val[0]*(right_x-x)/(right_x-left_x);
+						fixMask.at<Vec3b>(y,x).val[1] += result.at<Vec3b>(y,x).val[1]*(x-left_x)/(right_x-left_x);
+						fixMask.at<Vec3b>(y,x).val[1] += src1.at<Vec3b>(y,x).val[1]*(right_x-x)/(right_x-left_x);
+						fixMask.at<Vec3b>(y,x).val[2] += result.at<Vec3b>(y,x).val[2]*(x-left_x)/(right_x-left_x);
+						fixMask.at<Vec3b>(y,x).val[2] += src1.at<Vec3b>(y,x).val[2]*(right_x-x)/(right_x-left_x);
+						// if(right_x - x > x - left_x)
+						// 	fixMask.at<Vec3b>(y,x) = src1.at<Vec3b>(y,x);
+						// else
+						// 	fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
+					}
+				}
+				else
+				{
+					fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
 				}
 			}
 			else
 			{
-				fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
+				if(right_x - x > x - left_x)
+					fixMask.at<Vec3b>(y,x) = src1.at<Vec3b>(y,x);
+				else
+					fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
 			}
-
-			// double result_distance = result.at<Vec3b>(y,x).val[2]*0.299 + result.at<Vec3b>(y,x).val[1]*0.587 + result.at<Vec3b>(y,x).val[0]*0.114; 
-			// double src1_distance = src1.at<Vec3b>(y,x).val[2]*0.299 + src1.at<Vec3b>(y,x).val[1]*0.587 + src1.at<Vec3b>(y,x).val[0]*0.114; 
-			// if(result_distance > src1_distance)
-			// {
-			// 	fixMask.at<Vec3b>(y,x) = result.at<Vec3b>(y,x);
-			// }
 		}
 	}
 
