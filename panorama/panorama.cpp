@@ -248,7 +248,7 @@ int main(int argc, char** argv)
 	{
 		Mat _stitchedImage;
 		Mat mask;
-		vector<array<int,2>> meshVertexs;
+		vector<Point2f> meshVertexs;
 
 		cout << "Local warping stage:" << endl;
 		cout << "start preprocessing" << endl;
@@ -261,11 +261,13 @@ int main(int argc, char** argv)
 		Mat mesh_img = _stitchedImage.clone();
 		for(int i = 0; i < meshVertexs.size(); i++)
 		{
-			int i_ = meshVertexs[i][0];
-			int j_ = meshVertexs[i][1];
-			circle(mesh_img,Point(j_,i_),3,Vec3b(255,0,0));
+			circle(mesh_img,meshVertexs[i],3,Vec3b(255,0,0));
 		}
 		imwrite("fulll.jpg",mesh_img);
+		cout << "start global warping" << endl;
+		Mat rectangle;
+		globalWarping(_stitchedImage, rectangle, meshVertexs);
+		cout << "finish global warping" << endl;
 	}
 
 	return 0;
@@ -844,7 +846,7 @@ void preprocess(const Mat &src, Mat &dst, Mat &mask)
 	//imwrite("mask.jpg",mask);
 }
 
-Mat localWarping(const Mat &img, const Mat &mask, vector<array<int,2>> &meshVertexs, int &meshx, int &meshy)
+Mat localWarping(const Mat &img, const Mat &mask, vector<Point2f> &meshVertexs, int &meshx, int &meshy)
 {
 	Mat localImg = img.clone();
 	Mat localMask = mask.clone();
@@ -918,8 +920,7 @@ Mat localWarping(const Mat &img, const Mat &mask, vector<array<int,2>> &meshVert
 		//	 << displace_y.at<int32_t>(i_,j_) << ", "
 		//	 << displace_x.at<int32_t>(i_,j_) << endl;
 		//circle(localImg,Point(j_,i_),3,Scalar(22));
-		array<int,2> pt = {displace_y.at<int32_t>(i_,j_), displace_x.at<int32_t>(i_,j_)};
-		meshVertexs.push_back(pt);
+		meshVertexs.push_back(Point(displace_x.at<int32_t>(i_,j_), displace_y.at<int32_t>(i_,j_)));
 	}
 	return localImg;
 }
@@ -1202,4 +1203,143 @@ void showHorizontalSeam(Mat &img, const vector<uint> seam)
 {
 	for (int i = 0; i < img.cols; ++i)
 		img.at<Vec3b>(seam[i], i) = Vec3b(0, 0, 255);	//Set the color of the seam to Red
+}
+
+void globalWarping(const Mat &img, Mat &dst, vector<Point2f> &Vertexs)
+{
+	vector<Point2f> fake;
+	int meshx = sqrt((double)img.cols/(double)img.rows)*22.0;
+	int meshy = sqrt((double)img.rows/(double)img.cols)*22.0;
+
+	double x_ = (double)(img.cols-1)/(meshx-1);
+	double y_ = (double)(img.rows-1)/(meshy-1);
+
+	for(int i = 0; i < meshy; i++)
+		for(int j = 0; j < meshx; j++)
+		{
+			int i_ = y_*i;
+			int j_ = x_*j;
+			fake.push_back(Point2f(j_,i_));
+		}
+
+	vector< vector<int>> tri_list;
+	get_tri(img, Vertexs, tri_list);
+
+	Mat image;
+	img.convertTo(image,CV_32F);
+
+	dst = Mat::zeros(img.size(), CV_32FC3);
+	image.copyTo(dst);
+
+	for(int i = 0; i < tri_list.size(); i++)
+	{
+		vector<Point2f> t_old(3), t_new(3);
+		t_old[0] = Vertexs[tri_list[i][0]];
+		t_old[1] = Vertexs[tri_list[i][1]];
+		t_old[2] = Vertexs[tri_list[i][2]];
+		t_new[0] = fake[tri_list[i][0]];
+		t_new[1] = fake[tri_list[i][1]];
+		t_new[2] = fake[tri_list[i][2]];
+		morph_triangle(image, dst, t_old, t_new);
+	}
+	imwrite("final.jpg", dst);
+}
+
+int get_index(std::vector<cv::Point2f>& points, cv::Point2f pt) {
+    for (int i = 0; i < points.size(); i ++) {
+        if (points[i].x == pt.x && points[i].y == pt.y) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+
+void get_delaunay_tri(cv::Subdiv2D& subdiv, cv::Rect rect, std::vector< std::vector<int> >& tri_list, std::vector<cv::Point2f>& points) {
+    std::vector<cv::Vec6f> triangles;
+    subdiv.getTriangleList(triangles);
+    //cout << "# of triangles: " << triangles.size() << endl;
+
+    for (int i = 0; i < triangles.size(); i ++) {
+        cv::Vec6f t = triangles[i];
+        cv::Point pt1 = cv::Point(t[0], t[1]);
+        cv::Point pt2 = cv::Point(t[2], t[3]);
+        cv::Point pt3 = cv::Point(t[4], t[5]);
+
+        int pt1_index = get_index(points, pt1);
+        int pt2_index = get_index(points, pt2);
+        int pt3_index = get_index(points, pt3);
+
+        if (pt1_index >= 0 && pt2_index >= 0 && pt3_index >= 0) {
+            std::vector<int> e(3);
+            e[0] = pt1_index;
+            e[1] = pt2_index;
+            e[2] = pt3_index;
+            tri_list.push_back(e);
+        }
+    }
+    cout << "# of triangles: " << tri_list.size() << endl;
+
+    return;
+}
+
+void get_tri(const Mat &img, vector<Point2f> &points, vector< vector<int>> &tri_list)
+{
+	Rect rect(0,0,img.cols,img.rows);
+	Subdiv2D subdiv(rect);
+
+	for(int i = 0; i < points.size(); i++)
+	{
+		subdiv.insert(points[i]);
+	}
+
+	get_delaunay_tri(subdiv, rect, tri_list, points);
+}
+
+// Apply affine transform calculated using srcTri and dstTri to src
+void applyAffineTransform(Mat &warpImage, Mat &src, vector<Point2f> &srcTri, vector<Point2f> &dstTri)
+{
+	// Given a pair of triangles, find the affine transform.
+	Mat warpMat = getAffineTransform(srcTri, dstTri);
+
+	// Apply the Affine Transform just found to the src image
+	warpAffine(src, warpImage, warpMat, warpImage.size(), INTER_LINEAR, BORDER_REFLECT_101);
+}
+
+void morph_triangle(Mat& img, Mat& img_warp, vector<Point2f>& old_points, vector<Point2f>& new_points) {
+
+	// find bounding rectangle for triangle
+	Rect r_old = boundingRect(old_points);
+	Rect r_new = boundingRect(new_points);
+
+	// offset points by left top corner of the respective rectangles
+	vector<Point2f> old_offseted, new_offseted;
+	vector<Point> new_offseted_int;
+
+	for (int i = 0; i < 3; i++)
+	{
+		old_offseted.push_back(Point2f(old_points[i].x - r_old.x, old_points[i].y - r_old.y));
+		new_offseted.push_back(Point2f(new_points[i].x - r_new.x, new_points[i].y - r_new.y));
+		new_offseted_int.push_back(Point(new_points[i].x - r_new.x, new_points[i].y - r_new.y));
+	}
+
+	// get mask by filling triangle
+	Mat mask = Mat::zeros(r_new.height, r_new.width, CV_32FC3);
+	fillConvexPoly(mask, new_offseted_int, Scalar(1.0, 1.0, 1.0), 16, 0);
+
+	// Apply warpImage to small rectangular patches
+	Mat rect_img;
+	img(r_old).copyTo(rect_img);
+
+	Mat rect_warp = Mat::zeros(r_new.height, r_new.width, rect_img.type());
+	applyAffineTransform(rect_warp, rect_img, old_offseted, new_offseted);
+
+	// Copy triangular region of the rectangular patch to the output image
+	multiply(rect_warp, mask, rect_warp);
+	multiply(img_warp(r_new), Scalar(1.0, 1.0, 1.0) - mask, img_warp(r_new));
+	img_warp(r_new) = img_warp(r_new) + rect_warp;
+
+	//multiply(img(r_new), Scalar(1.0, 1.0, 1.0) - mask, img(r_new));
+	//img(r_new) = img(r_new) + rect_warp;
+
 }
