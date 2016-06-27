@@ -52,7 +52,7 @@ void output(Mat &stitchedImage, char* name, char* para1, char* para2);
 void output_refine(Mat &stitchedImage, char* name, char* para1, char* para2, int width);
 
 void preprocess(const Mat &src, Mat &dst, Mat &mask);
-Mat localWarping(const Mat &img, const Mat &mask, vector<array<int,2>> &meshVertexs, int &meshx, int &meshy);
+Mat localWarping(const Mat &img, const Mat &mask, vector<Point2f> &meshVertexs, int &meshx, int &meshy);
 bool findSubimage(const Mat &img, const Mat &mask, Rect &sub);
 void computeFullEnergy(Mat &img, Mat &energy);
 void computeEnergyAfterSeamRemoval(const Mat &image, Mat& energy, vector<uint> seam);
@@ -62,3 +62,10 @@ void completeVerticalSeam(Mat& image, Mat& mask, Mat& displace,  const vector<ui
 void completeHorizontalSeam(Mat& image, Mat& mask, Mat& displace,  const vector<uint> &seam, bool up);
 void showVerticalSeam(Mat &img, const vector<uint> seam);
 void showHorizontalSeam(Mat &img, const vector<uint> seam);
+
+void globalWarping(const Mat &img, Mat &dst, vector<Point2f> &Vertexs);
+int get_index(std::vector<cv::Point2f>& points, cv::Point2f pt);
+void get_delaunay_tri(cv::Subdiv2D& subdiv, cv::Rect rect, std::vector< std::vector<int> >& tri_list, std::vector<cv::Point2f>& points);
+void get_tri(const Mat &img, vector<Point2f> &points, vector< vector<int>> &tri_list);
+void applyAffineTransform(Mat &warpImage, Mat &src, vector<Point2f> &srcTri, vector<Point2f> &dstTri);
+void morph_triangle(Mat& img, Mat& img_warp, vector<Point2f>& old_points, vector<Point2f>& new_points);
