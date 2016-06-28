@@ -238,17 +238,23 @@ int main(int argc, char** argv)
 	{
 		Mat refinedImage;
 		size_t offset = param.panorama_path.rfind('/');
-		refineImage(images[0].rows, stitchedImage, refinedImage);
 		string refined_path = param.panorama_path;
 		refined_path.insert(offset+1, "cropped_");
-		cout << "cropped image: " << refined_path << endl;
+		cout << "cropping image: " << param.panorama_path << endl;
+		refineImage(images[0].rows, stitchedImage, refinedImage);
 		imwrite(refined_path, refinedImage);
+		cout << "Cropping Done!" << endl;
 	}
 	if(param.do_rectangling)
 	{
 		Mat _stitchedImage;
 		Mat mask;
 		vector<Point2f> meshVertexs;
+
+		string rectangled_path = param.panorama_path;
+		size_t offset = param.panorama_path.rfind('/');
+		rectangled_path.insert(offset+1, "rectangled_");
+		cout << "rectangling image: " << param.panorama_path << endl;
 
 		cout << "Local warping stage:" << endl;
 		cout << "start preprocessing" << endl;
@@ -258,16 +264,12 @@ int main(int argc, char** argv)
 		cout << "start local warping" << endl;
 		localWarping(_stitchedImage, mask, meshVertexs, meshx, meshy);
 		cout << "finish local warping" << endl;
-		Mat mesh_img = _stitchedImage.clone();
-		for(int i = 0; i < meshVertexs.size(); i++)
-		{
-			circle(mesh_img,meshVertexs[i],3,Vec3b(255,0,0));
-		}
-		imwrite("fulll.jpg",mesh_img);
 		cout << "start global warping" << endl;
-		Mat rectangle;
-		globalWarping(_stitchedImage, rectangle, meshVertexs);
+		Mat rectangledImage;
+		globalWarping(_stitchedImage, rectangledImage, meshVertexs);
 		cout << "finish global warping" << endl;
+		imwrite(rectangled_path, rectangledImage);
+		cout << "Rectangling Done!" << endl;
 	}
 
 	return 0;
@@ -903,7 +905,6 @@ Mat localWarping(const Mat &img, const Mat &mask, vector<Point2f> &meshVertexs, 
 		seam_pre = seam;
 		//imwrite(string("./square_output/complete")+to_string(count)+string(".jpg"),localImg);
 	}
-	imwrite("full.jpg", localImg);
 
 	meshx = sqrt((double)localImg.cols/(double)localImg.rows)*22.0;
 	meshy = sqrt((double)localImg.rows/(double)localImg.cols)*22.0;
