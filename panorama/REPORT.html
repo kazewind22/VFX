@@ -1,0 +1,298 @@
+<html>
+
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type">
+<title>VFX Final Project</title>  
+
+<!-- include MathJax  -->
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+</script>
+<script type="text/javascript"
+  src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+<style type="text/css">
+body,form,h1,ul{
+	padding: 0; margin: 0;
+}
+h1,h2,h3,h4,h5,h6{
+	font-weight: normal;
+	font-size: 100%;
+}
+body, table{
+	font-size: 12px;
+	font-family: Verdana;
+	line-height: 150%;
+}
+body{
+	margin-top: 30px;
+	margin-left: 100px;
+	margin-right: 100px;
+}
+table{
+	text-align: center;
+	margin-top: 0px;
+	margin-bottom: 24px;
+}
+a{
+	color:blue;
+}
+.title{
+	font-size: 24px;
+	text-align: center;
+	line-height: 120%;
+}
+.overview{
+	font-weight: bold;
+}
+.subtitle{
+	font-size: 16px;
+	font-weight: bold;
+}
+.subsubtitle{
+	font-size: 14px;
+	font-weight: bold;
+}
+.author{
+    font-size: 16px;
+	line-height: 100%;
+	text-align: center;
+}
+.journal{
+	font-weight: bold;
+	text-align: center;
+}
+.main_body{
+	width:90%;
+	margin-right: auto;
+	margin-left: auto;	
+}
+.thumbnail1{
+	height:200px;
+}
+.thumbnail2{
+	height:150px;
+}
+
+.reference{
+    line-height: 200%;
+}
+caption {
+    caption-side:bottom;
+}
+</style>
+</head>
+
+<body>
+	<p class="title">Digital Visual Effect</p>
+    <p class="title">Final Project: System implementation</p>
+    <p class="title"><b>Rectangling Panoramic Images via Warping</b></p>
+	<div class="author">
+	<p>B01902015 陳柏佑 ,   B01902037 楊孟遠 ,   B01902039 施楷文</p>
+	</div>
+
+<table align="center">
+	<tbody>
+        <tr>
+            <td><img width="500" src="./image/original_input1.jpg"></td>
+            <td><img width="500" src="./image/final_output1.jpg"></td>
+        </tr>
+        <tr>
+            <td style="height: 22px">(a)</td>
+            <td style="height: 22px">(b)</td>
+        </tr>
+    </tbody>
+    <caption>
+        Figure 1: (a) Stitched panoramic images with irregular boundaries. (b) Result after warping.
+    </caption>
+</table>
+
+<!------------------------------------------------------------------------------------>
+<p class="subtitle"><strong>1. Project Description</strong></p>
+
+    In project 2, we had implemented a system for image stitching. However, the result image have irregular boundaries, which are not lovable - most viewers prefer rectangular images. In the previous project, we solve this problem by simply cropping the panorama. But cropping may lose desired content and reduce the impression of a wide field of view.
+    </br></br>
+    Here, we've studied and implement another paper "Rectangling Panoramic Images via Warping"<a href="#ref-main" STYLE="text-decoration:none">[1]</a> to try out an outstanding solution. We've tested our system on the result from project 2, and both have decent performance.
+    </br></br>
+
+    <table align="center">
+        <tbody>
+            <tr>
+                <td><img width="550" src="./image/pano1.jpg"></td>
+                <td><img width="450" src="./image/pano2.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(a)</td>
+                <td style="height: 22px">(b)</td>
+            </tr>
+        </tbody>
+        <caption>
+            Figure 2: Result from our project 2.
+        </caption>
+    </table>
+    
+<!------------------------------------------------------------------------------------>
+<p class="subtitle"><strong>2. Algorithm</strong></p>
+    
+    There's two main steps in this work: (1) Local Warping and (2) Globla Warping.
+
+<p class="subsubtitle"><strong>2.1. Local Warping</strong></p>
+
+    First, from the original input image, we use "Seam Carving"<a href="#ref-sc" STYLE="text-decoration:none">[2]</a> algorithm to perform local warping and transform the input image into the one with rectangular boundaries.
+
+    <table align="center">
+        <tbody><tr>
+            <td><img width="700" src="./image/seam_carving_algo.png"></td>
+        </tr>
+        <caption>
+            Figure 3: Seam Carving Algorithm. <a href="#ref-sc" STYLE="text-decoration:none">[2]</a> : For each round, we (i) first find the longest bar  of missing pixels, and then (ii) insert a seam to fill up the missing pixels .
+        </caption>
+    </tbody></table> 
+    
+    <table align="center">
+        <tbody><tr>
+            <td><img width="800" src="./image/seam_carving.gif"></td>
+        </tr>
+        <caption>
+            Figure 4: The process of Seam Carving with our input.
+        </caption>
+    </tbody></table> 
+        
+    However, we did encounter some trobules here: there's some noise around the boundaries in our input. Take figure 2-(a) as example:
+    </br></br>
+    <table align="center">
+        <tbody>
+            <tr>
+                <td style="height: 22px">(a)</td>
+                <td><img width="800" src="./image/pano1.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(b)</td>
+                <td><img width="790" src="./image/boundary_noisy.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(c)</td>
+                <td><img width="790" src="./image/boundary_clear.jpg"></td>
+            </tr>
+        </tbody>
+        <caption>
+            Figure 5: Noisy boundaries problem. In (b), we denotes the pixels with RGB = (0, 0, 0) as black, otherwise as gray. We can observed that missing pixels don't always have RGB = (0, 0, 0) due to the noise of our input. We solve this problem by: First, set a threshold (R < 15 && G < 15 && B < 15) to define missing pixels. Second, start from the center of the image, pick up neighbor existed pixels recursivly to ensure that the shape of the boundaries are convex. The new boundaries obtained are shown in (c). We can observed that the noise is filtered and the boundaries are clear.
+        </caption>
+    </table>
+        
+<p class="subsubtitle"><strong>2.2. Global Warping</strong></p> 
+
+    After local warping, we can get preliminary result, but somehow with some appearent distoration. (See the red circle in figure 6)
+    Thus, we do global warping to generate better outputs.
+    </br></br>
+    <table align="center">
+        <tbody>
+            <tr>
+                <td><img width="600" src="./image/put_vertex.jpg"></td>
+            </tr>
+        </tbody>        
+        <caption>
+            Figure 6: First, we place vertexes on the result from local warping.
+        </caption>
+    </table> 
+    <table align="center">
+        <tbody>
+            <tr>
+                <td><img width="600" src="./image/vertex_back.jpg"></td>
+            </tr>
+        </tbody>        
+        <caption>
+            Figure 7: Second, we project vertexes back to the original input image.
+        </caption>
+    </table> 
+
+    After projecting vertexes back to the original input image, we wants to calculate the best location of vertexes after warping - the less distoration the better. Thus, we defines there energy function: (1) <b>Es</b> for Shape Preservation, (2) <b>El</b> for Line Preservation, (3) <b>Eb</b> for Boundary Constraints.
+
+<p class="subsubtitle"><strong>2.2.1. Shape Preservation</strong></p> 
+    Shape-preserving energy <b>Es</b> encourages each quad to undergo a similarity transformation (translation + rotation + scaling).
+
+<p class="subsubtitle"><strong>2.2.2. Line Preservation</strong></p> 
+    Line-preserving energy <b>El</b> encourages that the straight lines are kept straight, and parallel lines are kept parallel.
+
+<p class="subsubtitle"><strong>2.2.3. Boundary Constraints</strong></p> 
+    To make sure the final output is a rectangle, we have boundary constrains <b>Eb</b>. The detailed definition of these three energy function please refer to the original paper<a href="#ref-main" STYLE="text-decoration:none">[1]</a>.
+
+<p class="subsubtitle"><strong>2.3. Vertex optimization</strong></p>
+    After defining those three energy function above, we can obtained total energy function:
+    </br></br>
+    <b>Etotal = Es + </b>Pl<b> * El + </b>Pb<b> * Eb</b>
+    </br></br>
+    Here we choose to implement a simpler version instead: we didn't add <b>El</b> in, since our inputs come from image stitching so that they usually don't have big area of missing pixels, the line preservation constrain won't do much in our case. So here's our total energy function:
+    </br></br>
+    <b>Etotal = Es + </b>Pb<b> * Eb</b>
+    </br></br>
+    The parameter Pb is set to infinetly big (10^8), since we must obey the boundary constrain.
+    Last, we use linear system to solve this optimization problem and get the best vertex position.
+
+
+<p class="subtitle"><strong>3. Result</strong></p> 
+    
+    We test our system on two of our project 2 results.
+    </br></br>
+    <table align="center">
+        <tbody>
+            <tr>
+                <td><img width="800" src="./image/pano1.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(a) Input image </td>
+            </tr>
+            <tr>
+                <td><img width="800" src="./image/pano1.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(b) output </td>
+            </tr>
+        </tbody>        
+        <caption>
+            Figure 9.
+        </caption>
+    </table> 
+    <table align="center">
+        <tbody>
+            <tr>
+                <td><img width="600" src="./image/pano2.jpg"></td>
+                <td><img width="600" src="./image/pano2.jpg"></td>
+            </tr>
+            <tr>
+                <td style="height: 22px">(a) Input image </td>
+                <td style="height: 22px">(b) output </td>
+            </tr>  
+        </tbody>        
+        <caption>
+            Figure 10.
+        </caption>
+    </table> 
+    </br></br>
+    We can see that on both images, our system can obtained decent results.
+    
+    
+<!------------------------------------------------------------------------------------>
+<p class="subtitle"><strong>Reference</strong></p>    
+<p class="reference">
+
+<a name="ref-main"></a>[1] He, Kaiming, Huiwen Chang, and Jian Sun. "Rectangling panoramic images via warping." ACM Transactions on Graphics (TOG) 32.4 (2013): 79.</br>
+
+<a name="ref-sc"></a>[2] Avidan, Shai, and Ariel Shamir. "Seam carving for content-aware image resizing." ACM Transactions on graphics (TOG). Vol. 26. No. 3. ACM, 2007.</br>
+
+</p>
+    
+    
+</br>
+<font color=208040 SIZE=2>Last Modified:&nbsp; 
+    <script language="JavaScript">
+        <!--  hide script from old browsers
+          document.write(document.lastModified)
+        // end hiding contents -->
+    </script>
+    </font>
+</br></br></br>
+
+</body>
+</html>
